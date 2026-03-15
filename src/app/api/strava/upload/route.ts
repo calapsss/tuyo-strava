@@ -14,6 +14,9 @@ interface UploadRequestBody {
   name?: string;
   description?: string;
   activityType?: "run" | "walk" | "cycle";
+  trainer?: boolean;
+  commute?: boolean;
+  hideFromHome?: boolean;
 }
 
 interface StravaUploadResponse {
@@ -67,6 +70,8 @@ async function uploadToStrava(accessToken: string, payload: UploadRequestBody) {
 
   if (payload.name?.trim()) formData.append("name", payload.name.trim());
   if (payload.description?.trim()) formData.append("description", payload.description.trim());
+  if (typeof payload.trainer === "boolean") formData.append("trainer", payload.trainer ? "true" : "false");
+  if (typeof payload.commute === "boolean") formData.append("commute", payload.commute ? "true" : "false");
   const sportType = sportTypeForActivity(payload.activityType);
   if (sportType) formData.append("sport_type", sportType);
 
@@ -82,6 +87,24 @@ async function uploadToStrava(accessToken: string, payload: UploadRequestBody) {
   return { response, body };
 }
 
+async function parsePayload(request: NextRequest): Promise<UploadRequestBody> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    return {
+      gpx: String(formData.get("gpx") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      activityType: String(formData.get("activityType") ?? "") as UploadRequestBody["activityType"],
+      trainer: String(formData.get("trainer") ?? "") === "true",
+      commute: String(formData.get("commute") ?? "") === "true",
+      hideFromHome: String(formData.get("hideFromHome") ?? "") === "true",
+    };
+  }
+
+  return (await request.json().catch(() => ({}))) as UploadRequestBody;
+}
+
 export async function POST(request: NextRequest) {
   try {
     getStravaClientId();
@@ -90,7 +113,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  const payload = (await request.json().catch(() => ({}))) as UploadRequestBody;
+  const payload = await parsePayload(request);
   if (!payload.gpx || payload.gpx.trim().length === 0) {
     return NextResponse.json({ error: "GPX payload is required." }, { status: 400 });
   }
@@ -139,6 +162,7 @@ export async function POST(request: NextRequest) {
     uploadId: upload.body.id,
     uploadStatus: upload.body.status ?? "Your file is being processed.",
     activityId: upload.body.activity_id ?? null,
+    requestedHideFromHome: Boolean(payload.hideFromHome),
   });
 
   if (refreshed) {

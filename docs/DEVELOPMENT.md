@@ -99,3 +99,13 @@ When developing features that call external services:
 - `STRAVA_CLIENT_ID`
 - `STRAVA_CLIENT_SECRET`
 - optional `STRAVA_REDIRECT_URI` if callback differs from the default
+
+### Strava Upload Modal Behavior
+
+- The modal lets users set:
+- title and description (sent to Strava upload)
+- `Hide from Home`, `Trainer`, and `Commute` flags
+- local-only private notes (stored in browser localStorage)
+- optional photo attachment
+- If auth is required mid-flow, metadata is persisted and restored after OAuth callback.
+- Photo upload is best-effort and may fail if Strava does not grant the media endpoint for the app/account.

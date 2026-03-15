@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
 import { LineChartCard } from "@/components/LineChartCard";
 import { Sidebar } from "@/components/Sidebar";
+import { StravaUploadModal, type StravaUploadDraft } from "@/components/StravaUploadModal";
 import { generateGpx } from "@/lib/gpx-generator";
 import { applyLoopsToRoute, type LoopMode } from "@/lib/route-loops";
 import { snapRouteToRoads } from "@/lib/osm-matching";
@@ -76,18 +77,25 @@ function previewKeyFor({
 }
 
 const STRAVA_PENDING_UPLOAD_KEY = "tuyo.pendingStravaUpload";
+const STRAVA_DRAFT_UPLOAD_KEY = "tuyo.stravaUploadDraft";
+const STRAVA_PRIVATE_NOTES_KEY = "tuyo.stravaPrivateNotes";
 
 interface StravaUploadPayload {
   gpx: string;
   name: string;
   description: string;
   activityType: ActivityType;
+  trainer: boolean;
+  commute: boolean;
+  hideFromHome: boolean;
+  privateNote: string;
 }
 
 interface StravaUploadApiResponse {
   uploadId?: number;
   uploadStatus?: string;
   activityId?: number | null;
+  requestedHideFromHome?: boolean;
   error?: string;
   authUrl?: string;
 }
@@ -117,6 +125,16 @@ export default function Home() {
   const [isUploadingToStrava, setIsUploadingToStrava] = useState(false);
   const [isStravaConnected, setIsStravaConnected] = useState(false);
   const [isStravaConfigured, setIsStravaConfigured] = useState(true);
+  const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
+  const [stravaPhoto, setStravaPhoto] = useState<File | null>(null);
+  const [stravaDraft, setStravaDraft] = useState<StravaUploadDraft>({
+    name: "Morning Run",
+    description: "Great morning run through the park.",
+    privateNote: "",
+    hideFromHome: false,
+    trainer: false,
+    commute: false,
+  });
   const [drawTrigger, setDrawTrigger] = useState(0);
   const [userLocation, setUserLocation] = useState<LngLatTuple | null>(null);
   const [statusMessage, setStatusMessage] = useState("Draw your route, then generate realism preview.");
@@ -404,7 +422,7 @@ export default function Home() {
     }
   }, [activityType, canDownload, hasFreshPreview, previewTrack, runName, startDateTime]);
 
-  const createStravaPayload = useCallback((): StravaUploadPayload | null => {
+  const createStravaPayload = useCallback((draft: StravaUploadDraft): StravaUploadPayload | null => {
     if (!previewTrack || !hasFreshPreview) {
       return null;
     }
@@ -421,11 +439,15 @@ export default function Home() {
 
     return {
       gpx,
-      name: runName || `Simulated ${activityType}`,
-      description: description || "",
+      name: draft.name.trim() || runName || `Simulated ${activityType}`,
+      description: draft.description.trim(),
       activityType,
+      trainer: draft.trainer,
+      commute: draft.commute,
+      hideFromHome: draft.hideFromHome,
+      privateNote: draft.privateNote.trim(),
     };
-  }, [activityType, description, hasFreshPreview, previewTrack, runName, startDateTime]);
+  }, [activityType, hasFreshPreview, previewTrack, runName, startDateTime]);
 
   const pollUploadStatus = useCallback(async (uploadId: number): Promise<number | null> => {
     for (let attempt = 0; attempt < 12; attempt += 1) {
@@ -448,67 +470,168 @@ export default function Home() {
     return null;
   }, []);
 
+  const persistPrivateNote = useCallback((note: string, title: string, activityId: number | null) => {
+    const trimmed = note.trim();
+    if (!trimmed) return;
+
+    const raw = localStorage.getItem(STRAVA_PRIVATE_NOTES_KEY);
+    const entries = raw ? (JSON.parse(raw) as Array<Record<string, unknown>>) : [];
+    entries.unshift({
+      activityId,
+      title,
+      note: trimmed,
+      createdAt: new Date().toISOString(),
+    });
+    localStorage.setItem(STRAVA_PRIVATE_NOTES_KEY, JSON.stringify(entries.slice(0, 50)));
+  }, []);
+
+  const updateActivityVisibility = useCallback(async (activityId: number, hideFromHome: boolean) => {
+    if (!hideFromHome) return;
+    await fetch(`/api/strava/activities/${activityId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hideFromHome: true }),
+    });
+  }, []);
+
+  const uploadPhoto = useCallback(async (activityId: number, photo: File, caption: string): Promise<boolean> => {
+    const formData = new FormData();
+    formData.append("activityId", String(activityId));
+    formData.append("photo", photo, photo.name);
+    if (caption.trim()) {
+      formData.append("caption", caption.trim());
+    }
+
+    const response = await fetch("/api/strava/media", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      setStatusMessage(`Activity uploaded, but photo failed: ${body.error ?? "Photo endpoint unavailable."}`);
+      return false;
+    }
+
+    return true;
+  }, []);
+
   const uploadToStrava = useCallback(
-    async (payload: StravaUploadPayload) => {
+    async (payload: StravaUploadPayload, photo: File | null): Promise<boolean> => {
       setIsUploadingToStrava(true);
       try {
+        const formData = new FormData();
+        formData.append("gpx", payload.gpx);
+        formData.append("name", payload.name);
+        formData.append("description", payload.description);
+        formData.append("activityType", payload.activityType);
+        formData.append("trainer", payload.trainer ? "true" : "false");
+        formData.append("commute", payload.commute ? "true" : "false");
+        formData.append("hideFromHome", payload.hideFromHome ? "true" : "false");
+
         const response = await fetch("/api/strava/upload", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: formData,
         });
 
         const body = (await response.json().catch(() => ({}))) as StravaUploadApiResponse;
         if (response.status === 401 && body.authUrl) {
-          localStorage.setItem(STRAVA_PENDING_UPLOAD_KEY, JSON.stringify(payload));
+          if (photo) {
+            const draftForReconnect: StravaUploadDraft = {
+              name: payload.name,
+              description: payload.description,
+              privateNote: payload.privateNote,
+              hideFromHome: payload.hideFromHome,
+              trainer: payload.trainer,
+              commute: payload.commute,
+            };
+            localStorage.setItem(STRAVA_DRAFT_UPLOAD_KEY, JSON.stringify(draftForReconnect));
+          } else {
+            localStorage.setItem(STRAVA_PENDING_UPLOAD_KEY, JSON.stringify(payload));
+          }
           window.location.href = body.authUrl;
-          return;
+          return false;
         }
 
         if (!response.ok) {
           setStatusMessage(`Strava upload failed: ${body.error ?? "Unknown upload error."}`);
-          return;
+          return false;
         }
 
         setIsStravaConnected(true);
         const uploadId = body.uploadId;
         if (!uploadId) {
+          persistPrivateNote(payload.privateNote, payload.name, body.activityId ?? null);
           setStatusMessage("Strava accepted upload request.");
-          return;
+          return true;
         }
 
         setStatusMessage("File sent to Strava. Finalizing activity...");
         const activityId = await pollUploadStatus(uploadId);
         if (activityId) {
-          setStatusMessage(`Uploaded to Strava successfully. Activity ID: ${activityId}`);
-          return;
+          persistPrivateNote(payload.privateNote, payload.name, activityId);
+          await updateActivityVisibility(activityId, payload.hideFromHome);
+          if (photo) {
+            const uploadedPhoto = await uploadPhoto(activityId, photo, payload.description);
+            if (uploadedPhoto) {
+              setStatusMessage(`Uploaded to Strava successfully with photo. Activity ID: ${activityId}`);
+              return true;
+            }
+          } else {
+            setStatusMessage(`Uploaded to Strava successfully. Activity ID: ${activityId}`);
+            return true;
+          }
         }
 
         setStatusMessage("Upload queued on Strava. Check your Strava feed in a moment.");
+        return true;
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Unknown network error.";
         setStatusMessage(`Strava upload failed: ${reason}`);
+        return false;
       } finally {
         setIsUploadingToStrava(false);
       }
     },
-    [pollUploadStatus],
+    [persistPrivateNote, pollUploadStatus, updateActivityVisibility, uploadPhoto],
   );
 
-  const handleUploadToStrava = useCallback(async () => {
+  const handleConfirmStravaUpload = useCallback(async () => {
     if (!canUploadToStrava) {
       setStatusMessage("Generate an up-to-date preview before uploading to Strava.");
       return;
     }
 
-    const payload = createStravaPayload();
+    const payload = createStravaPayload(stravaDraft);
     if (!payload) {
       setStatusMessage("Preview data is missing. Generate preview again.");
       return;
     }
 
-    await uploadToStrava(payload);
-  }, [canUploadToStrava, createStravaPayload, uploadToStrava]);
+    localStorage.setItem(STRAVA_DRAFT_UPLOAD_KEY, JSON.stringify(stravaDraft));
+    const success = await uploadToStrava(payload, stravaPhoto);
+    if (success) {
+      setIsStravaModalOpen(false);
+      setStravaPhoto(null);
+    } else if (!isStravaConnected && stravaPhoto) {
+      setStatusMessage("Strava login required. Re-select the photo after reconnect.");
+    }
+  }, [canUploadToStrava, createStravaPayload, isStravaConnected, stravaDraft, stravaPhoto, uploadToStrava]);
+
+  const handleUploadToStrava = useCallback(() => {
+    if (!canUploadToStrava) {
+      setStatusMessage("Generate an up-to-date preview before uploading to Strava.");
+      return;
+    }
+
+    setStravaDraft((previous) => ({
+      ...previous,
+      name: runName || previous.name,
+      description: description || previous.description,
+    }));
+    setStravaPhoto(null);
+    setIsStravaModalOpen(true);
+  }, [canUploadToStrava, description, runName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -534,6 +657,17 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const draftRaw = localStorage.getItem(STRAVA_DRAFT_UPLOAD_KEY);
+    if (!draftRaw) return;
+    try {
+      const restored = JSON.parse(draftRaw) as StravaUploadDraft;
+      setStravaDraft((previous) => ({ ...previous, ...restored }));
+    } catch {
+      // Ignore malformed local draft data.
+    }
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const stravaFlag = params.get("strava");
     const reason = params.get("reason");
@@ -545,12 +679,25 @@ export default function Home() {
         localStorage.removeItem(STRAVA_PENDING_UPLOAD_KEY);
         try {
           const pendingPayload = JSON.parse(pendingRaw) as StravaUploadPayload;
-          void uploadToStrava(pendingPayload);
+          void uploadToStrava(pendingPayload, null);
         } catch {
           setStatusMessage("Connected to Strava. Pending upload payload was invalid.");
         }
       } else {
-        setStatusMessage("Connected to Strava.");
+        const draftRaw = localStorage.getItem(STRAVA_DRAFT_UPLOAD_KEY);
+        if (draftRaw) {
+          try {
+            const restoredDraft = JSON.parse(draftRaw) as StravaUploadDraft;
+            setStravaDraft(restoredDraft);
+            setStravaPhoto(null);
+            setIsStravaModalOpen(true);
+            setStatusMessage("Connected to Strava. Re-select your photo then confirm upload.");
+          } catch {
+            setStatusMessage("Connected to Strava.");
+          }
+        } else {
+          setStatusMessage("Connected to Strava.");
+        }
       }
     } else if (stravaFlag === "error") {
       setStatusMessage(`Strava login failed: ${reason ?? "authorization was denied."}`);
@@ -760,6 +907,21 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      <StravaUploadModal
+        isOpen={isStravaModalOpen}
+        isSubmitting={isUploadingToStrava}
+        isConnected={isStravaConnected}
+        draft={stravaDraft}
+        photo={stravaPhoto}
+        onChange={(patch) => setStravaDraft((previous) => ({ ...previous, ...patch }))}
+        onPhotoChange={setStravaPhoto}
+        onClose={() => {
+          if (isUploadingToStrava) return;
+          setIsStravaModalOpen(false);
+        }}
+        onSubmit={handleConfirmStravaUpload}
+      />
 
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-[1500px] px-4 py-3 text-sm text-slate-600 sm:px-6 text-center">
