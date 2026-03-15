@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
-import { Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
+import { Bell, ChevronDown, CirclePlus, Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
 import { LineChartCard } from "@/components/LineChartCard";
 import { Sidebar } from "@/components/Sidebar";
 import { generateGpx } from "@/lib/gpx-generator";
@@ -341,15 +342,64 @@ export default function Home() {
   }, [activityType, canDownload, hasFreshPreview, previewTrack, runName, startDateTime]);
 
   return (
-    <main className="min-h-screen bg-[#f1f1f1] px-4 py-5 text-slate-900 sm:px-6">
-      <div className="mx-auto max-w-[1500px]">
-        <h1 className="mb-4 text-4xl font-semibold tracking-tight text-slate-900">Create Your Custom Route</h1>
+    <div className="min-h-screen bg-[#f1f1f1] text-slate-900">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex h-16 max-w-[1500px] items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-7">
+            <Image
+              src="/tuyo.png"
+              alt="TUYO"
+              width={240}
+              height={80}
+              className="h-7 w-auto"
+              priority
+            />
+            {/* <nav className="hidden items-center gap-6 text-[15px] text-slate-700 md:flex">
+              <button type="button" className="inline-flex items-center gap-1.5 hover:text-slate-900">
+                Dashboard
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-16 items-center border-b-2 border-[#fc5200] font-semibold text-slate-900"
+              >
+                Training
+              </button>
+              <button type="button" className="hover:text-slate-900">
+                Maps
+              </button>
+              <button type="button" className="hover:text-slate-900">
+                Challenges
+              </button>
+            </nav> */}
+          </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
-          <section className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-[#f8f8f8] p-4">
-              <h2 className="text-2xl font-semibold">Draw Your Route</h2>
-              <p className="mt-1 text-sm text-slate-600">Search for a location and click on the map to create your route.</p>
+          {/* <div className="flex items-center gap-4">
+            <button
+              type="button"
+              className="hidden rounded-md bg-[#fc5200] px-4 py-2 text-sm font-semibold text-white sm:inline-flex"
+            >
+              Start Trial
+            </button>
+            <Bell className="hidden h-5 w-5 text-slate-500 sm:block" />
+            <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-slate-300 text-xs font-semibold text-white sm:flex">
+              U
+            </div>
+            <ChevronDown className="hidden h-4 w-4 text-slate-500 sm:block" />
+            <CirclePlus className="h-5 w-5 text-[#fc5200]" />
+          </div> */}
+        </div>
+      </header>
+
+      <main className="px-4 py-5 sm:px-6">
+        <div className="mx-auto max-w-[1500px]">
+          <h1 className="mb-4 text-4xl font-semibold tracking-tight text-slate-900">Compliance tumakbo? Tuyo.</h1>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
+            <section className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-[#f8f8f8] p-4">
+                <h2 className="text-2xl font-semibold">Draw Your Route</h2>
+                <p className="mt-1 text-sm text-slate-600">Search for a location and click on the map to create your route.</p>
 
               <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2">
                 <div className="relative min-w-[220px] flex-1">
@@ -403,10 +453,10 @@ export default function Home() {
                   ? "Preview is ready. Tune sliders on the right and regenerate if needed."
                   : "Preview not generated or out of date. Click Generate Realism Preview before downloading."}
               </div>
-            </div>
+              </div>
 
-            <div className="rounded-xl border border-slate-200 bg-[#f8f8f8] p-4">
-              <h2 className="mb-3 text-2xl font-semibold">Data Visualization</h2>
+              <div className="rounded-xl border border-slate-200 bg-[#f8f8f8] p-4">
+                <h2 className="mb-3 text-2xl font-semibold">Data Visualization</h2>
 
               <div className="space-y-3">
                 <LineChartCard
@@ -438,45 +488,46 @@ export default function Home() {
                     .map((pointItem) => ({ x: pointItem.distanceKm, y: pointItem.heartRate ?? 0 }))}
                 />
               </div>
-            </div>
-          </section>
+              </div>
+            </section>
 
-          <Sidebar
-            activityType={activityType}
-            averagePace={averagePace}
-            startDateTime={startDateTime}
-            runName={runName}
-            description={description}
-            realism={realism}
-            stats={previewStats}
-            routeDistanceKm={routeDistanceKm}
-            pointCount={activeRoute.length}
-            hasSnappedRoute={snappedRoute.length > 1}
-            useSnappedRoute={useSnappedRoute}
-            hasFreshPreview={hasFreshPreview}
-            canSnap={canSnap}
-            canGeneratePreview={canGeneratePreview}
-            canDownload={canDownload}
-            isSnapping={isSnapping}
-            isGeneratingPreview={isGeneratingPreview}
-            isDownloading={isDownloading}
-            isLocating={isLocating}
-            statusMessage={statusMessage}
-            onActivityTypeChange={handleActivityTypeChange}
-            onAveragePaceChange={handleAveragePaceChange}
-            onStartDateTimeChange={handleStartDateTimeChange}
-            onRunNameChange={handleRunNameChange}
-            onDescriptionChange={handleDescriptionChange}
-            onRealismChange={handleRealismChange}
-            onUseSnappedRouteChange={handleUseSnappedRouteChange}
-            onDrawRoute={() => setDrawTrigger((value) => value + 1)}
-            onLocateMe={handleLocateMe}
-            onSnapRoute={handleSnapRoute}
-            onGeneratePreview={handleGeneratePreview}
-            onDownload={handleDownload}
-          />
+            <Sidebar
+              activityType={activityType}
+              averagePace={averagePace}
+              startDateTime={startDateTime}
+              runName={runName}
+              description={description}
+              realism={realism}
+              stats={previewStats}
+              routeDistanceKm={routeDistanceKm}
+              pointCount={activeRoute.length}
+              hasSnappedRoute={snappedRoute.length > 1}
+              useSnappedRoute={useSnappedRoute}
+              hasFreshPreview={hasFreshPreview}
+              canSnap={canSnap}
+              canGeneratePreview={canGeneratePreview}
+              canDownload={canDownload}
+              isSnapping={isSnapping}
+              isGeneratingPreview={isGeneratingPreview}
+              isDownloading={isDownloading}
+              isLocating={isLocating}
+              statusMessage={statusMessage}
+              onActivityTypeChange={handleActivityTypeChange}
+              onAveragePaceChange={handleAveragePaceChange}
+              onStartDateTimeChange={handleStartDateTimeChange}
+              onRunNameChange={handleRunNameChange}
+              onDescriptionChange={handleDescriptionChange}
+              onRealismChange={handleRealismChange}
+              onUseSnappedRouteChange={handleUseSnappedRouteChange}
+              onDrawRoute={() => setDrawTrigger((value) => value + 1)}
+              onLocateMe={handleLocateMe}
+              onSnapRoute={handleSnapRoute}
+              onGeneratePreview={handleGeneratePreview}
+              onDownload={handleDownload}
+            />
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

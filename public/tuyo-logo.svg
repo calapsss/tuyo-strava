@@ -1,0 +1,20 @@
+<svg width="460" height="132" viewBox="0 0 460 132" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tuyoGradient" x1="0" y1="0" x2="460" y2="132" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F04A2F" />
+      <stop offset="1" stop-color="#E94B1A" />
+    </linearGradient>
+  </defs>
+  <rect width="460" height="132" fill="white" />
+  <text
+    x="14"
+    y="102"
+    fill="url(#tuyoGradient)"
+    font-family="Impact, 'Arial Black', sans-serif"
+    font-size="120"
+    font-weight="900"
+    letter-spacing="2"
+  >
+    TUYO
+  </text>
+</svg>
