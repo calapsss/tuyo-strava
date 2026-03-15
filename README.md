@@ -65,6 +65,7 @@ Strava upload requires server-side credentials:
 - optional `STRAVA_REDIRECT_URI` (defaults to `<origin>/api/strava/callback`)
 - `DISCORD_PAYMENT_WEBHOOK_URL` (for payment proof forwarding)
 - optional `NEXT_PUBLIC_GCASH_QR_IMAGE_PATH` (defaults to `/gcash-qr.png`)
+- optional `NEXT_PUBLIC_PROMO_END_AT` (ISO timestamp for countdown)
 
 Copy `.env.example` to `.env.local` if you want to keep environment variables explicit.
 

@@ -80,7 +80,16 @@ function previewKeyFor({
 const STRAVA_PENDING_UPLOAD_KEY = "tuyo.pendingStravaUpload";
 const STRAVA_DRAFT_UPLOAD_KEY = "tuyo.stravaUploadDraft";
 const STRAVA_PRIVATE_NOTES_KEY = "tuyo.stravaPrivateNotes";
-const GATE_PAYMENT_AMOUNT_PHP = 50;
+const REGULAR_PAYMENT_AMOUNT_PHP = 50;
+const GATE_PAYMENT_AMOUNT_PHP = 20;
+const PROMO_TITLE = "First Month Launch Promo";
+const PROMO_END_AT_ISO =
+  process.env.NEXT_PUBLIC_PROMO_END_AT ??
+  (() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() + 1);
+    return date.toISOString();
+  })();
 const GCASH_QR_IMAGE_PATH = process.env.NEXT_PUBLIC_GCASH_QR_IMAGE_PATH ?? "/gcash-qr.png";
 
 type PaymentStep = "pay" | "proof";
@@ -1013,6 +1022,9 @@ export default function Home() {
         isOpen={isPaymentModalOpen}
         step={paymentStep}
         amountPhp={GATE_PAYMENT_AMOUNT_PHP}
+        regularAmountPhp={REGULAR_PAYMENT_AMOUNT_PHP}
+        promoTitle={PROMO_TITLE}
+        promoEndAtIso={PROMO_END_AT_ISO}
         qrImagePath={GCASH_QR_IMAGE_PATH}
         proofFile={paymentProofFile}
         isSubmitting={isSubmittingPaymentProof}
@@ -1044,7 +1056,7 @@ export default function Home() {
 
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-[1500px] px-4 py-3 text-sm text-slate-600 sm:px-6 text-center">
-          Copyright 2026 © Charles Calapini
+          Copyright 2026 © TUYO. All rights reserved.
         </div>
       </footer>
     </div>
