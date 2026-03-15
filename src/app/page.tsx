@@ -25,6 +25,7 @@ export default function Home() {
   const [useSnappedRoute, setUseSnappedRoute] = useState(false);
   const [isSnapping, setIsSnapping] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [drawTrigger, setDrawTrigger] = useState(0);
   const [userLocation, setUserLocation] = useState<LngLatTuple | null>(null);
   const [statusMessage, setStatusMessage] = useState("Draw a route to get started.");
@@ -36,7 +37,7 @@ export default function Home() {
 
   const routeDistanceKm = useMemo(() => computeRouteDistanceKm(activeRoute), [activeRoute]);
   const canSnap = rawRoute.length > 1 && !isSnapping;
-  const canDownload = activeRoute.length > 1;
+  const canDownload = activeRoute.length > 1 && !isExporting;
 
   const handleRouteChange = useCallback((nextRoute: LngLatTuple[]) => {
     setRawRoute(nextRoute);
@@ -93,37 +94,78 @@ export default function Home() {
     );
   }, []);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(async () => {
     if (!canDownload) return;
 
-    const parsedStart = new Date(startDateTime);
-    const startTime = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
-    const simulated = simulateTrackPoints({
-      coordinates: activeRoute,
-      averagePaceMinPerKm: averagePace,
-      startTime,
-      activityType,
-    });
+    try {
+      setIsExporting(true);
+      let exportRoute = activeRoute;
 
-    const gpx = generateGpx(
-      simulated.map((point) => [point.lat, point.lng, point.ele, point.time, point.hr]),
-      {
-        name: `Simulated ${activityType} ${startTime.toLocaleString()}`,
+      if (rawRoute.length > 1 && (snappedRoute.length < 2 || !useSnappedRoute)) {
+        setStatusMessage("Snapping route to OSM roads for export...");
+        try {
+          const freshlySnapped = await snapRouteToRoads({
+            coordinates: rawRoute,
+            activityType,
+          });
+          setSnappedRoute(freshlySnapped);
+          setUseSnappedRoute(true);
+          exportRoute = freshlySnapped;
+        } catch {
+          exportRoute = activeRoute;
+          setStatusMessage("Could not auto-snap route. Exporting current path.");
+        }
+      }
+
+      setStatusMessage("Generating realistic telemetry (pace, elevation, HR, GPS jitter)...");
+      const parsedStart = new Date(startDateTime);
+      const startTime = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
+      const simulated = await simulateTrackPoints({
+        coordinates: exportRoute,
+        averagePaceMinPerKm: averagePace,
+        startTime,
         activityType,
-      },
-    );
+      });
 
-    const blob = new Blob([gpx], { type: "application/gpx+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    const dateLabel = startTime.toISOString().slice(0, 10);
-    anchor.href = url;
-    anchor.download = `${activityType}-${dateLabel}.gpx`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+      if (simulated.length < 2) {
+        setStatusMessage("Simulation failed: route is too short or invalid.");
+        return;
+      }
 
-    setStatusMessage(`Downloaded GPX (${simulated.length} track points exported).`);
-  };
+      const gpx = generateGpx(
+        simulated.map((point) => [point.lat, point.lng, point.ele, point.time, point.hr]),
+        {
+          name: `Simulated ${activityType} ${startTime.toLocaleString()}`,
+          activityType,
+        },
+      );
+
+      const blob = new Blob([gpx], { type: "application/gpx+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const dateLabel = startTime.toISOString().slice(0, 10);
+      anchor.href = url;
+      anchor.download = `${activityType}-${dateLabel}.gpx`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+
+      setStatusMessage(`Downloaded GPX (${simulated.length} timestamped track points exported).`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown export error.";
+      setStatusMessage(`Export failed: ${reason}`);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [
+    activeRoute,
+    activityType,
+    averagePace,
+    canDownload,
+    rawRoute,
+    snappedRoute.length,
+    startDateTime,
+    useSnappedRoute,
+  ]);
 
   return (
     <main className="min-h-screen p-3 sm:p-5">
@@ -139,6 +181,7 @@ export default function Home() {
           canSnap={canSnap}
           canDownload={canDownload}
           isSnapping={isSnapping}
+          isExporting={isExporting}
           isLocating={isLocating}
           statusMessage={statusMessage}
           onActivityTypeChange={setActivityType}

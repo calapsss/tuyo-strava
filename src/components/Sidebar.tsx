@@ -14,6 +14,7 @@ interface SidebarProps {
   canSnap: boolean;
   canDownload: boolean;
   isSnapping: boolean;
+  isExporting: boolean;
   isLocating: boolean;
   statusMessage: string;
   onActivityTypeChange: (value: ActivityType) => void;
@@ -43,6 +44,7 @@ export function Sidebar({
   canSnap,
   canDownload,
   isSnapping,
+  isExporting,
   isLocating,
   statusMessage,
   onActivityTypeChange,
@@ -164,7 +166,7 @@ export function Sidebar({
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-black transition enabled:hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Download className="h-4 w-4" />
-          Download GPX
+          {isExporting ? "Generating GPX..." : "Download GPX"}
         </button>
       </div>
 
