@@ -605,6 +605,20 @@ export default function Home() {
     [persistPrivateNote, pollUploadStatus, updateActivityVisibility, uploadPhoto],
   );
 
+  const requestPaymentLocation = useCallback(async (): Promise<GeolocationPosition> => {
+    if (!navigator.geolocation) {
+      throw new Error("Geolocation is not supported on this device/browser.");
+    }
+
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve(position),
+        (error) => reject(new Error(error.message || "Could not access location.")),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+      );
+    });
+  }, []);
+
   const submitPaymentProof = useCallback(async (): Promise<boolean> => {
     if (!paymentProofFile) {
       setStatusMessage("Please upload your GCash payment screenshot first.");
@@ -613,11 +627,36 @@ export default function Home() {
 
     setIsSubmittingPaymentProof(true);
     try {
+      setStatusMessage("Requesting location permission for payment verification...");
+      const position = await requestPaymentLocation();
+      const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
+
       const formData = new FormData();
       formData.append("screenshot", paymentProofFile, paymentProofFile.name);
       formData.append("amount", String(GATE_PAYMENT_AMOUNT_PHP));
       formData.append("title", stravaDraft.name || runName);
       formData.append("activityType", activityType);
+      formData.append("clientUserAgent", navigator.userAgent ?? "");
+      formData.append("clientPlatform", navigator.platform ?? "");
+      formData.append("clientLanguage", navigator.language ?? "");
+      formData.append("clientLanguages", JSON.stringify(navigator.languages ?? []));
+      formData.append("clientTimeZone", Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
+      formData.append("clientLocalTime", new Date().toString());
+      formData.append("clientScreen", `${window.screen.width}x${window.screen.height}`);
+      formData.append("clientViewport", `${window.innerWidth}x${window.innerHeight}`);
+      formData.append("clientDeviceMemory", String((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? ""));
+      formData.append("clientHardwareConcurrency", String(navigator.hardwareConcurrency ?? ""));
+      formData.append("clientMaxTouchPoints", String(navigator.maxTouchPoints ?? ""));
+      formData.append("clientReferrer", document.referrer ?? "");
+      formData.append("clientPageUrl", window.location.href);
+      formData.append("geoLatitude", String(latitude));
+      formData.append("geoLongitude", String(longitude));
+      formData.append("geoAccuracyMeters", String(accuracy));
+      formData.append("geoAltitudeMeters", altitude === null ? "" : String(altitude));
+      formData.append("geoAltitudeAccuracyMeters", altitudeAccuracy === null ? "" : String(altitudeAccuracy));
+      formData.append("geoHeadingDegrees", heading === null ? "" : String(heading));
+      formData.append("geoSpeedMps", speed === null ? "" : String(speed));
+      formData.append("geoTimestamp", new Date(position.timestamp).toISOString());
 
       const response = await fetch("/api/payments/proof", {
         method: "POST",
@@ -638,7 +677,7 @@ export default function Home() {
     } finally {
       setIsSubmittingPaymentProof(false);
     }
-  }, [activityType, paymentProofFile, runName, stravaDraft.name]);
+  }, [activityType, paymentProofFile, requestPaymentLocation, runName, stravaDraft.name]);
 
   const handleConfirmPaymentProof = useCallback(async () => {
     const submitted = await submitPaymentProof();

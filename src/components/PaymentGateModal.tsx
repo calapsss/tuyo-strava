@@ -69,6 +69,9 @@ export function PaymentGateModal({
             <p className="text-sm text-slate-700">
               Upload your payment screenshot. It will be sent to your Discord channel for verification.
             </p>
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              We will also request your device location on submit for fraud checks.
+            </p>
 
             <input
               type="file"
