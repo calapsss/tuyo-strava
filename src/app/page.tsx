@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
-import { Bell, ChevronDown, CirclePlus, Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
+import { Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
 import { LineChartCard } from "@/components/LineChartCard";
 import { Sidebar } from "@/components/Sidebar";
 import { generateGpx } from "@/lib/gpx-generator";

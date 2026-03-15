@@ -60,7 +60,7 @@ export function analyzeTrack(track: SimulatedTrackPoint[]): { stats: TrackStats;
   }
 
   const cumulativeDistanceKm: number[] = [0];
-  const rawPace: number[] = [6];
+  const cumulativeTimeSec: number[] = [0];
   let totalDistanceKm = 0;
   let elevationGain = 0;
   const hrValues: number[] = [];
@@ -75,9 +75,7 @@ export function analyzeTrack(track: SimulatedTrackPoint[]): { stats: TrackStats;
     cumulativeDistanceKm.push(totalDistanceKm);
 
     const deltaSec = Math.max(1, (current.time.getTime() - previous.time.getTime()) / 1000);
-    const speedKmh = (segmentDistanceKm / deltaSec) * 3600;
-    const pace = speedKmh > 0.25 ? 60 / speedKmh : rawPace[rawPace.length - 1] || 0;
-    rawPace.push(clamp(pace, 2.2, 40));
+    cumulativeTimeSec.push(cumulativeTimeSec[cumulativeTimeSec.length - 1] + deltaSec);
 
     const eleDelta = current.ele - previous.ele;
     if (eleDelta > 0) {
@@ -89,13 +87,26 @@ export function analyzeTrack(track: SimulatedTrackPoint[]): { stats: TrackStats;
     }
   }
 
+  const rollingWindowSec = 18;
+  const rawPace: number[] = new Array(track.length).fill(0);
+  let left = 0;
+  for (let i = 1; i < track.length; i += 1) {
+    while (left < i - 1 && cumulativeTimeSec[i] - cumulativeTimeSec[left] > rollingWindowSec) {
+      left += 1;
+    }
+
+    const windowDistanceKm = Math.max(cumulativeDistanceKm[i] - cumulativeDistanceKm[left], 1e-5);
+    const windowDurationSec = Math.max(cumulativeTimeSec[i] - cumulativeTimeSec[left], 1);
+    rawPace[i] = clamp((windowDurationSec / 60) / windowDistanceKm, 2.5, 28);
+  }
+
   if (rawPace.length > 1) {
     rawPace[0] = rawPace[1];
   }
 
-  const smoothPace = movingAverage(rawPace, 5);
-  const smoothEle = movingAverage(track.map((pointItem) => pointItem.ele), 4);
-  const smoothHrRaw = movingAverage(track.map((pointItem) => pointItem.hr ?? 0), 6);
+  const smoothPace = movingAverage(rawPace, 4);
+  const smoothEle = movingAverage(track.map((pointItem) => pointItem.ele), 8);
+  const smoothHrRaw = movingAverage(track.map((pointItem) => pointItem.hr ?? 0), 10);
   const hasHr = hrValues.length > 0;
 
   const chart: ChartPoint[] = downsample(
