@@ -10,12 +10,32 @@ import { fetchElevationMeters } from "@/lib/elevation";
 export type ActivityType = "run" | "walk" | "cycle";
 export type LngLatTuple = [longitude: number, latitude: number];
 
+export interface RealismSettings {
+  paceInconsistencyPct: number;
+  gpsJitterMeters: number;
+  elevationNoiseMeters: number;
+  heartRateVariabilityPct: number;
+  smoothnessPct: number;
+  samplingIntervalSec: number;
+  includeHeartRate: boolean;
+}
+
+export const DEFAULT_REALISM_SETTINGS: RealismSettings = {
+  paceInconsistencyPct: 2,
+  gpsJitterMeters: 2.2,
+  elevationNoiseMeters: 0.9,
+  heartRateVariabilityPct: 4,
+  smoothnessPct: 82,
+  samplingIntervalSec: 1,
+  includeHeartRate: true,
+};
+
 export interface SimulatedTrackPoint {
   lat: number;
   lng: number;
   ele: number;
   time: Date;
-  hr: number;
+  hr: number | null;
 }
 
 interface SimulationOptions {
@@ -23,6 +43,7 @@ interface SimulationOptions {
   averagePaceMinPerKm: number;
   startTime: Date;
   activityType: ActivityType;
+  realism?: Partial<RealismSettings>;
 }
 
 interface RouteProfile {
@@ -31,8 +52,6 @@ interface RouteProfile {
   cumulativeDistancesM: number[];
   totalDistanceM: number;
 }
-
-const SAMPLE_INTERVAL_SEC = 1;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -107,8 +126,9 @@ function interpolateAlongRoute(
   };
 }
 
-function withGpsJitter(coordinate: LngLatTuple): LngLatTuple {
-  const jitterDistanceKm = randomBetween(0.002, 0.005);
+function withGpsJitter(coordinate: LngLatTuple, jitterMeters: number): LngLatTuple {
+  if (jitterMeters <= 0.05) return coordinate;
+  const jitterDistanceKm = randomBetween(0, jitterMeters * 0.7) / 1000;
   const jitterBearing = randomBetween(0, 360);
   const shifted = turfDestination(point(coordinate), jitterDistanceKm, jitterBearing, { units: "kilometers" });
   const [lng, lat] = shifted.geometry.coordinates as LngLatTuple;
@@ -127,9 +147,9 @@ function fallbackElevation(coordinates: LngLatTuple[]): number[] {
 }
 
 function defaultHeartRate(activityType: ActivityType): number {
-  if (activityType === "walk") return 128;
-  if (activityType === "cycle") return 132;
-  return 136;
+  if (activityType === "walk") return 118;
+  if (activityType === "cycle") return 124;
+  return 128;
 }
 
 function isRunDistanceWindow(distanceKm: number): boolean {
@@ -146,7 +166,12 @@ export async function simulateTrackPoints({
   averagePaceMinPerKm,
   startTime,
   activityType,
+  realism,
 }: SimulationOptions): Promise<SimulatedTrackPoint[]> {
+  const settings = { ...DEFAULT_REALISM_SETTINGS, ...realism };
+  const sampleIntervalSec = clamp(Math.round(settings.samplingIntervalSec), 1, 3);
+  const smoothness = clamp(settings.smoothnessPct / 100, 0, 1);
+
   const cleanedCoordinates = dedupeCoordinates(coordinates);
   if (cleanedCoordinates.length < 2) return [];
 
@@ -157,9 +182,15 @@ export async function simulateTrackPoints({
   const safePace = clamp(averagePaceMinPerKm, 2.5, 20);
   const baseSpeedMps = 1000 / (safePace * 60);
   const baselineDurationSec = profile.totalDistanceM / baseSpeedMps;
-  const minPointTarget = activityType === "run" && isRunDistanceWindow(routeDistanceKm) ? 2000 : 0;
-  let pauseBudgetSec = Math.max(0, Math.ceil(minPointTarget - (baselineDurationSec + 1)));
-  pauseBudgetSec += Math.round(routeDistanceKm * randomBetween(8, 20));
+  const minPointTarget = activityType === "run" && isRunDistanceWindow(routeDistanceKm) && sampleIntervalSec === 1 ? 2000 : 0;
+  const minDurationTargetSec = minPointTarget;
+  const inconsistency = clamp(settings.paceInconsistencyPct / 100, 0, 0.4);
+  const desiredDurationSec = Math.max(
+    baselineDurationSec * (1 + inconsistency * (0.07 + (1 - smoothness) * 0.08)),
+    minDurationTargetSec,
+  );
+  const durationScale = clamp(desiredDurationSec / baselineDurationSec, 1, 1.35);
+  const targetBaseSpeedMps = baseSpeedMps / durationScale;
 
   const sampledCoordinates: LngLatTuple[] = [cleanedCoordinates[0]];
   const sampledTimes: Date[] = [new Date(startTime.getTime())];
@@ -168,53 +199,50 @@ export async function simulateTrackPoints({
   let traveledDistanceM = 0;
   let routeSegmentIndex = 0;
   let paceNoise = 0;
-  let pauseRemainingSec = 0;
-  let nextPauseTriggerDistanceM = randomBetween(450, 1200);
+  let microPauseRemainingSec = 0;
+  let nextPauseTriggerDistanceM = randomBetween(1300, 2200);
+  const paceNoiseDrift = 0.88 + smoothness * 0.1;
+  const paceNoiseAmp = 0.003 + inconsistency * (0.05 + (1 - smoothness) * 0.08);
+  const fatigueAmp = 0.01 + inconsistency * 0.03;
+  const paceNoiseCap = 0.03 + inconsistency * 0.18;
 
   while (traveledDistanceM < profile.totalDistanceM) {
     if (
-      pauseRemainingSec <= 0 &&
-      pauseBudgetSec > 0 &&
+      microPauseRemainingSec <= 0 &&
+      inconsistency > 0.12 &&
       traveledDistanceM >= nextPauseTriggerDistanceM &&
-      traveledDistanceM < profile.totalDistanceM * 0.98
+      traveledDistanceM < profile.totalDistanceM * 0.985
     ) {
-      const stopDurationSec = Math.min(Math.round(randomBetween(6, 22)), pauseBudgetSec);
-      pauseRemainingSec = stopDurationSec;
-      pauseBudgetSec -= stopDurationSec;
-      nextPauseTriggerDistanceM += randomBetween(550, 1400);
+      microPauseRemainingSec = Math.round(randomBetween(2, 6));
+      nextPauseTriggerDistanceM += randomBetween(1300, 2300);
     }
 
     let speedMps = 0;
-    if (pauseRemainingSec > 0) {
-      speedMps = randomBetween(0, 0.35);
-      pauseRemainingSec -= SAMPLE_INTERVAL_SEC;
+    if (microPauseRemainingSec > 0) {
+      speedMps = randomBetween(0.45, 1.05);
+      microPauseRemainingSec -= sampleIntervalSec;
     } else {
-      paceNoise = clamp(paceNoise * 0.92 + randomBetween(-0.045, 0.045), -0.22, 0.28);
-      const fatiguePenalty = (traveledDistanceM / profile.totalDistanceM) * 0.08;
-      const simulatedPace = safePace * (1 + paceNoise + fatiguePenalty);
+      paceNoise = clamp(
+        paceNoise * paceNoiseDrift + randomBetween(-paceNoiseAmp, paceNoiseAmp),
+        -paceNoiseCap,
+        paceNoiseCap,
+      );
+      const fatiguePenalty = (traveledDistanceM / profile.totalDistanceM) * fatigueAmp;
+      const simulatedPace = safePace * durationScale * (1 + paceNoise + fatiguePenalty);
       speedMps = clamp(
         1000 / (simulatedPace * 60),
-        activityType === "walk" ? 0.6 : 1.0,
-        activityType === "cycle" ? 12 : 6,
+        activityType === "walk" ? 0.75 : 1.2,
+        activityType === "cycle" ? 12 : 6.5,
       );
     }
 
-    traveledDistanceM = Math.min(profile.totalDistanceM, traveledDistanceM + speedMps * SAMPLE_INTERVAL_SEC);
+    traveledDistanceM = Math.min(profile.totalDistanceM, traveledDistanceM + speedMps * sampleIntervalSec);
     const interpolated = interpolateAlongRoute(profile, traveledDistanceM, routeSegmentIndex);
     routeSegmentIndex = interpolated.segmentIndex;
-    currentTimeMs += SAMPLE_INTERVAL_SEC * 1000;
+    currentTimeMs += sampleIntervalSec * 1000;
     sampledCoordinates.push(interpolated.coordinate);
     sampledTimes.push(new Date(currentTimeMs));
     sampledSpeedsMps.push(speedMps);
-  }
-
-  while (pauseBudgetSec > 0) {
-    const stayCoordinate = sampledCoordinates[sampledCoordinates.length - 1];
-    currentTimeMs += SAMPLE_INTERVAL_SEC * 1000;
-    sampledCoordinates.push(stayCoordinate);
-    sampledTimes.push(new Date(currentTimeMs));
-    sampledSpeedsMps.push(randomBetween(0, 0.2));
-    pauseBudgetSec -= SAMPLE_INTERVAL_SEC;
   }
 
   let elevationMeters: number[];
@@ -227,35 +255,42 @@ export async function simulateTrackPoints({
     elevationMeters = fallbackElevation(sampledCoordinates);
   }
 
+  const elevationNoiseAmp = clamp(settings.elevationNoiseMeters, 0, 8);
+  const elevationNoiseDrift = 0.7 + smoothness * 0.25;
   let elevationNoise = 0;
   const noisyElevation = elevationMeters.map((value) => {
-    elevationNoise = elevationNoise * 0.62 + randomBetween(-0.9, 0.9);
-    return Math.max(0, value + elevationNoise + randomBetween(-0.5, 0.5));
+    elevationNoise =
+      elevationNoise * elevationNoiseDrift +
+      randomBetween(-elevationNoiseAmp, elevationNoiseAmp) * (0.08 + (1 - smoothness) * 0.14);
+    return Math.max(0, value + elevationNoise + randomBetween(-elevationNoiseAmp * 0.1, elevationNoiseAmp * 0.1));
   });
 
   const output: SimulatedTrackPoint[] = [];
   let currentHeartRate = defaultHeartRate(activityType);
+  const hrVariability = clamp(settings.heartRateVariabilityPct / 100, 0, 0.35);
+  const hrNoiseAmp = 0.4 + hrVariability * 3;
+  const hrAdaptation = 0.12 + (1 - smoothness) * 0.16;
 
   for (let i = 0; i < sampledCoordinates.length; i += 1) {
     const coordinate = sampledCoordinates[i];
-    const [jitteredLng, jitteredLat] = withGpsJitter(coordinate);
+    const [jitteredLng, jitteredLat] = withGpsJitter(coordinate, clamp(settings.gpsJitterMeters, 0, 10));
     const currentElevation = noisyElevation[i];
 
     if (i > 0) {
       const stepDistanceM = toMeters(sampledCoordinates[i - 1], sampledCoordinates[i]);
       const stepSpeedMps = sampledSpeedsMps[i];
-      const stepPace = stepSpeedMps > 0.25 ? 1000 / (stepSpeedMps * 60) : safePace * 1.6;
-      const effortLoad = clamp((safePace - stepPace) / safePace + 0.45, 0, 1);
+      const stepPace = stepSpeedMps > 0.2 ? 1000 / (stepSpeedMps * 60) : safePace * 1.55;
+      const effortLoad = clamp((safePace - stepPace) / safePace + 0.34, 0, 1);
       const grade = (currentElevation - noisyElevation[i - 1]) / Math.max(stepDistanceM, 1);
-      const climbingLoad = clamp(Math.max(grade, 0) * 8.5, 0, 1);
-      const speedDrift = clamp((stepSpeedMps - baseSpeedMps) / Math.max(baseSpeedMps, 0.8), -0.2, 0.5);
+      const climbingLoad = clamp(Math.max(grade, 0) * 6.2, 0, 1);
+      const speedDrift = clamp((stepSpeedMps - targetBaseSpeedMps) / Math.max(targetBaseSpeedMps, 0.8), -0.2, 0.42);
       const targetHr =
-        128 +
-        effortLoad * 24 +
-        climbingLoad * 20 +
-        speedDrift * 8 +
-        randomBetween(-3.2, 3.2);
-      currentHeartRate = clamp(currentHeartRate + (targetHr - currentHeartRate) * 0.26, 130, 170);
+        122 +
+        effortLoad * 20 +
+        climbingLoad * 12 +
+        speedDrift * 5 +
+        randomBetween(-hrNoiseAmp, hrNoiseAmp);
+      currentHeartRate = clamp(currentHeartRate + (targetHr - currentHeartRate) * hrAdaptation, 105, 178);
     }
 
     output.push({
@@ -263,7 +298,7 @@ export async function simulateTrackPoints({
       lng: jitteredLng,
       ele: currentElevation,
       time: sampledTimes[i],
-      hr: currentHeartRate,
+      hr: settings.includeHeartRate ? currentHeartRate : null,
     });
   }
 

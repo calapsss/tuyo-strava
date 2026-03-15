@@ -100,7 +100,7 @@ export function MapContainer({
   const endPoint = rawRouteLatLng[rawRouteLatLng.length - 1];
 
   return (
-    <div className="relative h-full overflow-hidden rounded-2xl border border-white/15">
+    <div className="relative h-full overflow-hidden rounded-lg border border-slate-200 bg-white">
       <LeafletMapContainer
         center={DEFAULT_CENTER}
         zoom={13}
@@ -153,7 +153,7 @@ export function MapContainer({
         ) : null}
       </LeafletMapContainer>
 
-      <div className="pointer-events-none absolute left-3 top-3 z-[500] max-w-sm rounded-lg border border-white/15 bg-black/55 px-3 py-2 text-xs text-slate-100 backdrop-blur-sm">
+      <div className="pointer-events-none absolute left-3 top-3 z-[500] max-w-sm rounded-md border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-sm">
         {isDrawing
           ? "Drawing mode: click to add points, double-click to finish, right-click to undo."
           : "Press Draw Route in the sidebar to start tracing a route."}

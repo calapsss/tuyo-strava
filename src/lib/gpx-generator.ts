@@ -3,7 +3,7 @@ export type GpxTrackTuple = [
   longitude: number,
   elevation: number,
   timestamp: Date | string,
-  heartRate: number,
+  heartRate: number | null,
 ];
 
 export interface GpxOptions {
@@ -52,17 +52,23 @@ export function generateGpx(trackPoints: GpxTrackTuple[], options: GpxOptions = 
       const safeLon = lon.toFixed(7);
       const safeEle = ele.toFixed(1);
       const safeTime = toIsoTimestamp(time);
-      const safeHr = Math.round(hr);
+      const safeHr = hr === null ? null : Math.round(hr);
+      const extensions =
+        safeHr === null
+          ? ""
+          : [
+              "<extensions>",
+              "<gpxtpx:TrackPointExtension>",
+              `<gpxtpx:hr>${safeHr}</gpxtpx:hr>`,
+              "</gpxtpx:TrackPointExtension>",
+              "</extensions>",
+            ].join("");
 
       return [
         `<trkpt lat="${safeLat}" lon="${safeLon}">`,
         `<ele>${safeEle}</ele>`,
         `<time>${safeTime}</time>`,
-        "<extensions>",
-        "<gpxtpx:TrackPointExtension>",
-        `<gpxtpx:hr>${safeHr}</gpxtpx:hr>`,
-        "</gpxtpx:TrackPointExtension>",
-        "</extensions>",
+        extensions,
         "</trkpt>",
       ].join("");
     })

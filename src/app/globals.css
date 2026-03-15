@@ -2,11 +2,11 @@
 @import "leaflet/dist/leaflet.css";
 
 :root {
-  --background: #040608;
-  --foreground: #f4f7fb;
-  --panel: rgba(10, 16, 24, 0.72);
-  --accent: #ff6b35;
-  --accent-soft: #ffd0b8;
+  --background: #f1f1f1;
+  --foreground: #101828;
+  --panel: #f8f8f8;
+  --accent: #ff5b14;
+  --accent-soft: #fff4ef;
 }
 
 @theme inline {
@@ -16,26 +16,23 @@
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 8% 0%, #102034 0%, transparent 56%),
-    radial-gradient(1000px 640px at 100% 100%, #3d2518 0%, transparent 52%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), sans-serif;
 }
 
 .leaflet-container {
-  background: #0c141d;
+  background: #eef2f6;
 }
 
 .leaflet-control-zoom {
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border: 1px solid #d4dae5 !important;
   box-shadow: none !important;
   overflow: hidden;
 }
 
 .leaflet-control-zoom a {
-  background: rgba(8, 14, 20, 0.9) !important;
-  color: #f8fafc !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
