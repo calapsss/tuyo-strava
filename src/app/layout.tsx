@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   description: "Compliance Tumakbo? TUYO!",
   applicationName: "TUYO",
   icons: {
-    icon: [{ url: "/icon.png", type: "image/png" }],
-    shortcut: [{ url: "/icon.png", type: "image/png" }],
+    icon: [{ url: "/favicon.ico", type: "image/x-icon" }, { url: "/icon.png", type: "image/png" }],
+    shortcut: [{ url: "/favicon.ico", type: "image/x-icon" }],
     apple: [{ url: "/icon.png", type: "image/png" }],
   },
   openGraph: {
