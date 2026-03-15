@@ -77,6 +77,12 @@ function densifyCoordinates(coordinates: LngLatTuple[], targetSpacingM = 18): Ln
   return dedupeConsecutive(densified);
 }
 
+function capCoordinateCount(coordinates: LngLatTuple[], maxPoints = 95): LngLatTuple[] {
+  if (coordinates.length <= maxPoints) return coordinates;
+  const stride = Math.ceil(coordinates.length / maxPoints);
+  return coordinates.filter((_, index) => index === 0 || index === coordinates.length - 1 || index % stride === 0);
+}
+
 function chunkCoordinates(coordinates: LngLatTuple[], maxChunkSize = 60, overlap = 2): LngLatTuple[][] {
   if (coordinates.length <= maxChunkSize) return [coordinates];
 
@@ -117,6 +123,15 @@ function buildRadiuses(coordinates: LngLatTuple[]): string {
   });
 
   return radiuses.join(";");
+}
+
+function buildTimestamps(count: number): string {
+  const start = Math.floor(Date.now() / 1000);
+  const timestamps: number[] = [];
+  for (let i = 0; i < count; i += 1) {
+    timestamps.push(start + i);
+  }
+  return timestamps.join(";");
 }
 
 function pathPreservationScore(rawChunk: LngLatTuple[], snapped: LngLatTuple[]) {
@@ -169,12 +184,13 @@ async function routeBetween(
 async function tryMapMatch(provider: OsrmProvider, chunk: LngLatTuple[]): Promise<LngLatTuple[] | null> {
   if (chunk.length < 3) return null;
 
-  const densified = densifyCoordinates(chunk, 18);
+  const densified = capCoordinateCount(densifyCoordinates(chunk, 18), 95);
   const encodedCoordinates = densified.map(([lng, lat]) => `${lng},${lat}`).join(";");
   const radiuses = buildRadiuses(densified);
+  const timestamps = buildTimestamps(densified.length);
   const url =
     `${provider.baseUrl}/match/v1/${provider.profile}/${encodedCoordinates}` +
-    `?geometries=geojson&overview=full&steps=false&tidy=false&gaps=split&annotations=false&radiuses=${radiuses}`;
+    `?geometries=geojson&overview=full&steps=false&tidy=false&gaps=split&annotations=false&radiuses=${radiuses}&timestamps=${timestamps}`;
 
   const response = await fetch(url);
   if (!response.ok) return null;

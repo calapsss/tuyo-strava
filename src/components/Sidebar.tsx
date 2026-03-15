@@ -10,11 +10,13 @@ import {
   HeartPulse,
   LocateFixed,
   Mountain,
+  Repeat2,
   Route,
   Shuffle,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ActivityType, RealismSettings } from "@/lib/route-simulation";
+import type { LoopMode } from "@/lib/route-loops";
 import type { TrackStats } from "@/lib/track-analytics";
 
 interface SidebarProps {
@@ -23,6 +25,8 @@ interface SidebarProps {
   startDateTime: string;
   runName: string;
   description: string;
+  loopCount: number;
+  loopMode: LoopMode;
   realism: RealismSettings;
   stats: TrackStats | null;
   routeDistanceKm: number;
@@ -43,6 +47,8 @@ interface SidebarProps {
   onStartDateTimeChange: (value: string) => void;
   onRunNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
+  onLoopCountChange: (value: number) => void;
+  onLoopModeChange: (value: LoopMode) => void;
   onRealismChange: (patch: Partial<RealismSettings>) => void;
   onUseSnappedRouteChange: (value: boolean) => void;
   onDrawRoute: () => void;
@@ -122,6 +128,8 @@ export function Sidebar({
   startDateTime,
   runName,
   description,
+  loopCount,
+  loopMode,
   realism,
   stats,
   routeDistanceKm,
@@ -142,6 +150,8 @@ export function Sidebar({
   onStartDateTimeChange,
   onRunNameChange,
   onDescriptionChange,
+  onLoopCountChange,
+  onLoopModeChange,
   onRealismChange,
   onUseSnappedRouteChange,
   onDrawRoute,
@@ -229,6 +239,35 @@ export function Sidebar({
             />
           </label>
         ) : null}
+
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+          <div className="mb-2 flex items-center gap-2">
+            <Repeat2 className="h-4 w-4 text-[#ff5b14]" />
+            <p className="text-sm font-medium text-slate-700">Loops</p>
+          </div>
+          <div className="grid grid-cols-[1fr_96px] gap-2">
+            <select
+              value={loopMode}
+              onChange={(event) => onLoopModeChange(event.target.value as LoopMode)}
+              className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm outline-none ring-[#ff5b14] focus:ring"
+            >
+              <option value="auto">Auto (best fit)</option>
+              <option value="repeat">Repeat Circuit</option>
+              <option value="out-and-back">Out & Back</option>
+            </select>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={loopCount}
+              onChange={(event) => onLoopCountChange(Number(event.target.value))}
+              className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm outline-none ring-[#ff5b14] focus:ring"
+            />
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Increase laps to repeat this route on the same road before preview/export.
+          </p>
+        </div>
 
         <RangeRow
           label="Average Pace (min/km)"

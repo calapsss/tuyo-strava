@@ -7,6 +7,7 @@ import { Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
 import { LineChartCard } from "@/components/LineChartCard";
 import { Sidebar } from "@/components/Sidebar";
 import { generateGpx } from "@/lib/gpx-generator";
+import { applyLoopsToRoute, type LoopMode } from "@/lib/route-loops";
 import { snapRouteToRoads } from "@/lib/osm-matching";
 import {
   computeRouteDistanceKm,
@@ -44,6 +45,8 @@ function previewKeyFor({
   realism,
   runName,
   description,
+  loopCount,
+  loopMode,
 }: {
   route: LngLatTuple[];
   activityType: ActivityType;
@@ -52,6 +55,8 @@ function previewKeyFor({
   realism: RealismSettings;
   runName: string;
   description: string;
+  loopCount: number;
+  loopMode: LoopMode;
 }): string {
   const first = route[0];
   const last = route[route.length - 1];
@@ -60,6 +65,8 @@ function previewKeyFor({
     averagePace: Number(averagePace.toFixed(3)),
     startDateTime,
     realism,
+    loopCount,
+    loopMode,
     runName,
     description,
     signature: route.length
@@ -74,6 +81,8 @@ export default function Home() {
   const [startDateTime, setStartDateTime] = useState(() => toDatetimeLocalValue(new Date()));
   const [runName, setRunName] = useState("Morning Run");
   const [description, setDescription] = useState("Great morning run through the park.");
+  const [loopCount, setLoopCount] = useState(1);
+  const [loopMode, setLoopMode] = useState<LoopMode>("auto");
   const [realism, setRealism] = useState<RealismSettings>(DEFAULT_REALISM_SETTINGS);
 
   const [rawRoute, setRawRoute] = useState<LngLatTuple[]>([]);
@@ -97,19 +106,25 @@ export default function Home() {
     [rawRoute, snappedRoute, useSnappedRoute],
   );
   const routeDistanceKm = useMemo(() => computeRouteDistanceKm(activeRoute), [activeRoute]);
+  const activeLoopedRoute = useMemo(
+    () => applyLoopsToRoute(activeRoute, loopCount, loopMode),
+    [activeRoute, loopCount, loopMode],
+  );
 
   const currentPreviewKey = useMemo(
     () =>
       previewKeyFor({
-        route: activeRoute,
+        route: activeLoopedRoute,
         activityType,
         averagePace,
         startDateTime,
         realism,
+        loopCount,
+        loopMode,
         runName,
         description,
       }),
-    [activeRoute, activityType, averagePace, startDateTime, realism, runName, description],
+    [activeLoopedRoute, activityType, averagePace, startDateTime, realism, loopCount, loopMode, runName, description],
   );
   const hasFreshPreview = Boolean(previewTrack && previewKey === currentPreviewKey);
 
@@ -174,6 +189,23 @@ export default function Home() {
   const handleDescriptionChange = useCallback(
     (value: string) => {
       setDescription(value);
+      invalidatePreview();
+    },
+    [invalidatePreview],
+  );
+
+  const handleLoopCountChange = useCallback(
+    (value: number) => {
+      const next = Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 1), 20) : 1;
+      setLoopCount(next);
+      invalidatePreview();
+    },
+    [invalidatePreview],
+  );
+
+  const handleLoopModeChange = useCallback(
+    (value: LoopMode) => {
+      setLoopMode(value);
       invalidatePreview();
     },
     [invalidatePreview],
@@ -250,11 +282,12 @@ export default function Home() {
         return;
       }
 
-      const previewRoute = useSnappedRoute ? snappedRoute : rawRoute;
+      const baseRoute = useSnappedRoute ? snappedRoute : rawRoute;
+      const previewRoute = applyLoopsToRoute(baseRoute, loopCount, loopMode);
       setStatusMessage(
         useSnappedRoute
-          ? "Generating telemetry preview using snapped road geometry..."
-          : "Generating telemetry preview using your original private path...",
+          ? `Generating telemetry preview using snapped road geometry (${loopCount} lap${loopCount > 1 ? "s" : ""})...`
+          : `Generating telemetry preview using your original private path (${loopCount} lap${loopCount > 1 ? "s" : ""})...`,
       );
       const parsedStart = new Date(startDateTime);
       const startTime = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
@@ -283,6 +316,8 @@ export default function Home() {
           averagePace,
           startDateTime,
           realism,
+          loopCount,
+          loopMode,
           runName,
           description,
         }),
@@ -301,6 +336,8 @@ export default function Home() {
     averagePace,
     canGeneratePreview,
     description,
+    loopCount,
+    loopMode,
     realism,
     rawRoute,
     runName,
@@ -497,6 +534,8 @@ export default function Home() {
               startDateTime={startDateTime}
               runName={runName}
               description={description}
+              loopCount={loopCount}
+              loopMode={loopMode}
               realism={realism}
               stats={previewStats}
               routeDistanceKm={routeDistanceKm}
@@ -517,6 +556,8 @@ export default function Home() {
               onStartDateTimeChange={handleStartDateTimeChange}
               onRunNameChange={handleRunNameChange}
               onDescriptionChange={handleDescriptionChange}
+              onLoopCountChange={handleLoopCountChange}
+              onLoopModeChange={handleLoopModeChange}
               onRealismChange={handleRealismChange}
               onUseSnappedRouteChange={handleUseSnappedRouteChange}
               onDrawRoute={() => setDrawTrigger((value) => value + 1)}
