@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
 import { LineChartCard } from "@/components/LineChartCard";
 import { Sidebar } from "@/components/Sidebar";
@@ -75,6 +75,28 @@ function previewKeyFor({
   });
 }
 
+const STRAVA_PENDING_UPLOAD_KEY = "tuyo.pendingStravaUpload";
+
+interface StravaUploadPayload {
+  gpx: string;
+  name: string;
+  description: string;
+  activityType: ActivityType;
+}
+
+interface StravaUploadApiResponse {
+  uploadId?: number;
+  uploadStatus?: string;
+  activityId?: number | null;
+  error?: string;
+  authUrl?: string;
+}
+
+interface StravaStatusResponse {
+  configured?: boolean;
+  connected?: boolean;
+}
+
 export default function Home() {
   const [activityType, setActivityType] = useState<ActivityType>("run");
   const [averagePace, setAveragePace] = useState(5.5);
@@ -92,6 +114,9 @@ export default function Home() {
   const [isLocating, setIsLocating] = useState(false);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isUploadingToStrava, setIsUploadingToStrava] = useState(false);
+  const [isStravaConnected, setIsStravaConnected] = useState(false);
+  const [isStravaConfigured, setIsStravaConfigured] = useState(true);
   const [drawTrigger, setDrawTrigger] = useState(0);
   const [userLocation, setUserLocation] = useState<LngLatTuple | null>(null);
   const [statusMessage, setStatusMessage] = useState("Draw your route, then generate realism preview.");
@@ -131,6 +156,7 @@ export default function Home() {
   const canSnap = rawRoute.length > 1 && !isSnapping;
   const canGeneratePreview = activeRoute.length > 1 && !isGeneratingPreview && !isSnapping;
   const canDownload = hasFreshPreview && !isDownloading;
+  const canUploadToStrava = hasFreshPreview && !isUploadingToStrava;
 
   const invalidatePreview = useCallback(() => {
     setPreviewTrack(null);
@@ -378,6 +404,166 @@ export default function Home() {
     }
   }, [activityType, canDownload, hasFreshPreview, previewTrack, runName, startDateTime]);
 
+  const createStravaPayload = useCallback((): StravaUploadPayload | null => {
+    if (!previewTrack || !hasFreshPreview) {
+      return null;
+    }
+
+    const parsedStart = new Date(startDateTime);
+    const startTime = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
+    const gpx = generateGpx(
+      previewTrack.map((pointItem) => [pointItem.lat, pointItem.lng, pointItem.ele, pointItem.time, pointItem.hr]),
+      {
+        name: runName || `Simulated ${activityType} ${startTime.toLocaleString()}`,
+        activityType,
+      },
+    );
+
+    return {
+      gpx,
+      name: runName || `Simulated ${activityType}`,
+      description: description || "",
+      activityType,
+    };
+  }, [activityType, description, hasFreshPreview, previewTrack, runName, startDateTime]);
+
+  const pollUploadStatus = useCallback(async (uploadId: number): Promise<number | null> => {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1400));
+      const statusResponse = await fetch(`/api/strava/uploads/${uploadId}`);
+      const statusBody = (await statusResponse.json().catch(() => ({}))) as {
+        complete?: boolean;
+        activityId?: number | null;
+      };
+
+      if (!statusResponse.ok) {
+        return null;
+      }
+
+      if (statusBody.complete) {
+        return statusBody.activityId ?? null;
+      }
+    }
+
+    return null;
+  }, []);
+
+  const uploadToStrava = useCallback(
+    async (payload: StravaUploadPayload) => {
+      setIsUploadingToStrava(true);
+      try {
+        const response = await fetch("/api/strava/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const body = (await response.json().catch(() => ({}))) as StravaUploadApiResponse;
+        if (response.status === 401 && body.authUrl) {
+          localStorage.setItem(STRAVA_PENDING_UPLOAD_KEY, JSON.stringify(payload));
+          window.location.href = body.authUrl;
+          return;
+        }
+
+        if (!response.ok) {
+          setStatusMessage(`Strava upload failed: ${body.error ?? "Unknown upload error."}`);
+          return;
+        }
+
+        setIsStravaConnected(true);
+        const uploadId = body.uploadId;
+        if (!uploadId) {
+          setStatusMessage("Strava accepted upload request.");
+          return;
+        }
+
+        setStatusMessage("File sent to Strava. Finalizing activity...");
+        const activityId = await pollUploadStatus(uploadId);
+        if (activityId) {
+          setStatusMessage(`Uploaded to Strava successfully. Activity ID: ${activityId}`);
+          return;
+        }
+
+        setStatusMessage("Upload queued on Strava. Check your Strava feed in a moment.");
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "Unknown network error.";
+        setStatusMessage(`Strava upload failed: ${reason}`);
+      } finally {
+        setIsUploadingToStrava(false);
+      }
+    },
+    [pollUploadStatus],
+  );
+
+  const handleUploadToStrava = useCallback(async () => {
+    if (!canUploadToStrava) {
+      setStatusMessage("Generate an up-to-date preview before uploading to Strava.");
+      return;
+    }
+
+    const payload = createStravaPayload();
+    if (!payload) {
+      setStatusMessage("Preview data is missing. Generate preview again.");
+      return;
+    }
+
+    await uploadToStrava(payload);
+  }, [canUploadToStrava, createStravaPayload, uploadToStrava]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStravaStatus = async () => {
+      try {
+        const response = await fetch("/api/strava/status");
+        const body = (await response.json().catch(() => ({}))) as StravaStatusResponse;
+        if (cancelled) return;
+        setIsStravaConfigured(body.configured !== false);
+        setIsStravaConnected(Boolean(body.connected));
+      } catch {
+        if (cancelled) return;
+        setIsStravaConfigured(false);
+        setIsStravaConnected(false);
+      }
+    };
+
+    void loadStravaStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stravaFlag = params.get("strava");
+    const reason = params.get("reason");
+
+    if (stravaFlag === "connected") {
+      setIsStravaConnected(true);
+      const pendingRaw = localStorage.getItem(STRAVA_PENDING_UPLOAD_KEY);
+      if (pendingRaw) {
+        localStorage.removeItem(STRAVA_PENDING_UPLOAD_KEY);
+        try {
+          const pendingPayload = JSON.parse(pendingRaw) as StravaUploadPayload;
+          void uploadToStrava(pendingPayload);
+        } catch {
+          setStatusMessage("Connected to Strava. Pending upload payload was invalid.");
+        }
+      } else {
+        setStatusMessage("Connected to Strava.");
+      }
+    } else if (stravaFlag === "error") {
+      setStatusMessage(`Strava login failed: ${reason ?? "authorization was denied."}`);
+    }
+
+    if (stravaFlag) {
+      params.delete("strava");
+      params.delete("reason");
+      const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+    }
+  }, [uploadToStrava]);
+
   return (
     <div className="min-h-screen bg-[#f1f1f1] text-slate-900">
       <header className="sticky top-0 z-[9999] border-b border-slate-200 bg-white">
@@ -546,10 +732,14 @@ export default function Home() {
               canSnap={canSnap}
               canGeneratePreview={canGeneratePreview}
               canDownload={canDownload}
+              canUploadToStrava={canUploadToStrava}
               isSnapping={isSnapping}
               isGeneratingPreview={isGeneratingPreview}
               isDownloading={isDownloading}
+              isUploadingToStrava={isUploadingToStrava}
               isLocating={isLocating}
+              isStravaConnected={isStravaConnected}
+              isStravaConfigured={isStravaConfigured}
               statusMessage={statusMessage}
               onActivityTypeChange={handleActivityTypeChange}
               onAveragePaceChange={handleAveragePaceChange}
@@ -565,6 +755,7 @@ export default function Home() {
               onSnapRoute={handleSnapRoute}
               onGeneratePreview={handleGeneratePreview}
               onDownload={handleDownload}
+              onUploadToStrava={handleUploadToStrava}
             />
           </div>
         </div>

@@ -15,6 +15,7 @@ Draw a route on a map, apply realistic telemetry simulation, preview pace/elevat
 - sampling interval
 - Preview generated stats and chart profiles before export.
 - Download generated GPX with optional heart-rate extensions.
+- One-click upload to Strava with OAuth login.
 
 ## Tech Stack
 
@@ -55,7 +56,11 @@ npm run lint
 
 ## Environment Variables
 
-This project currently works without required secrets.
+Strava upload requires server-side credentials:
+
+- `STRAVA_CLIENT_ID`
+- `STRAVA_CLIENT_SECRET`
+- optional `STRAVA_REDIRECT_URI` (defaults to `<origin>/api/strava/callback`)
 
 Copy `.env.example` to `.env.local` if you want to keep environment variables explicit.
 
@@ -72,6 +77,7 @@ Copy `.env.example` to `.env.local` if you want to keep environment variables ex
 7. Click `Generate Realism Preview`.
 8. Review metrics/charts.
 9. Click `Download GPX`.
+10. Optional: click `Connect Strava & Upload` (or `Upload To Strava`) for direct upload.
 
 ## Project Structure
 

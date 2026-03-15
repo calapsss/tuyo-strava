@@ -34,6 +34,7 @@ Open `http://localhost:3000`.
 - OpenStreetMap tiles for map rendering.
 - OSRM providers for snapping (`routing.openstreetmap.de`, `router.project-osrm.org`).
 - Elevation providers (`open-meteo`, `opentopodata`).
+- Strava API for OAuth + upload when configured.
 
 When developing features that call external services:
 
@@ -87,3 +88,14 @@ When developing features that call external services:
 - GPX validity checks
 - Add optional provider configuration via env vars.
 - Add import support for existing GPX routes.
+
+## Strava Integration Setup
+
+1. Create a Strava API application in the Strava developer dashboard.
+2. Set callback/authorization URL to:
+- `http://localhost:3000/api/strava/callback` for local development
+- your production callback URL for deployed environments
+3. Add these env vars:
+- `STRAVA_CLIENT_ID`
+- `STRAVA_CLIENT_SECRET`
+- optional `STRAVA_REDIRECT_URI` if callback differs from the default

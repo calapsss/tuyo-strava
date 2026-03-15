@@ -37,10 +37,14 @@ interface SidebarProps {
   canSnap: boolean;
   canGeneratePreview: boolean;
   canDownload: boolean;
+  canUploadToStrava: boolean;
   isSnapping: boolean;
   isGeneratingPreview: boolean;
   isDownloading: boolean;
+  isUploadingToStrava: boolean;
   isLocating: boolean;
+  isStravaConnected: boolean;
+  isStravaConfigured: boolean;
   statusMessage: string;
   onActivityTypeChange: (value: ActivityType) => void;
   onAveragePaceChange: (value: number) => void;
@@ -56,6 +60,7 @@ interface SidebarProps {
   onSnapRoute: () => void;
   onGeneratePreview: () => void;
   onDownload: () => void;
+  onUploadToStrava: () => void;
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -140,10 +145,14 @@ export function Sidebar({
   canSnap,
   canGeneratePreview,
   canDownload,
+  canUploadToStrava,
   isSnapping,
   isGeneratingPreview,
   isDownloading,
+  isUploadingToStrava,
   isLocating,
+  isStravaConnected,
+  isStravaConfigured,
   statusMessage,
   onActivityTypeChange,
   onAveragePaceChange,
@@ -159,6 +168,7 @@ export function Sidebar({
   onSnapRoute,
   onGeneratePreview,
   onDownload,
+  onUploadToStrava,
 }: SidebarProps) {
   return (
     <aside className="rounded-xl border border-slate-200 bg-[#f8f8f8] p-4 lg:sticky lg:top-4 lg:h-fit">
@@ -395,6 +405,24 @@ export function Sidebar({
           <Download className="h-4 w-4" />
           {isDownloading ? "Downloading..." : "Download GPX"}
         </button>
+
+        <button
+          type="button"
+          disabled={!canUploadToStrava || isUploadingToStrava || !isStravaConfigured}
+          onClick={onUploadToStrava}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {isUploadingToStrava
+            ? "Uploading To Strava..."
+            : isStravaConnected
+              ? "Upload To Strava"
+              : "Connect Strava & Upload"}
+        </button>
+
+        {!isStravaConfigured ? (
+          <p className="text-xs text-amber-600">Strava integration not configured on server.</p>
+        ) : null}
 
         <p className={`text-xs ${hasFreshPreview ? "text-emerald-600" : "text-amber-600"}`}>
           {hasFreshPreview
