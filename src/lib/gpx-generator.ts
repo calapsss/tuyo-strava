@@ -13,9 +13,9 @@ export interface GpxOptions {
 }
 
 const ACTIVITY_LABEL: Record<NonNullable<GpxOptions["activityType"]>, string> = {
-  run: "Running",
-  walk: "Walking",
-  cycle: "Cycling",
+  run: "running",
+  walk: "walking",
+  cycle: "cycling",
 };
 
 function escapeXml(value: string): string {
@@ -41,7 +41,7 @@ export function generateGpx(trackPoints: GpxTrackTuple[], options: GpxOptions = 
     throw new Error("Cannot create GPX without track points.");
   }
 
-  const creator = escapeXml(options.creator ?? "Route Forge GPX");
+  const creator = escapeXml(options.creator ?? "TuyoGPX");
   const name = escapeXml(options.name ?? "Simulated Activity");
   const activityType = ACTIVITY_LABEL[options.activityType ?? "run"];
   const metadataTime = toIsoTimestamp(trackPoints[0][3]);

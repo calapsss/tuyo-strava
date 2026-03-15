@@ -380,57 +380,57 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#f1f1f1] text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-[9999] border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-16 max-w-[1500px] items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-7">
-            <Image
-              src="/tuyo.png"
-              alt="TUYO"
-              width={240}
-              height={80}
-              className="h-7 w-auto"
-              priority
-            />
-            {/* <nav className="hidden items-center gap-6 text-[15px] text-slate-700 md:flex">
-              <button type="button" className="inline-flex items-center gap-1.5 hover:text-slate-900">
-                Dashboard
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-16 items-center border-b-2 border-[#fc5200] font-semibold text-slate-900"
-              >
-                Training
-              </button>
-              <button type="button" className="hover:text-slate-900">
-                Maps
-              </button>
-              <button type="button" className="hover:text-slate-900">
-                Challenges
-              </button>
-            </nav> */}
+        <Image
+          src="/tuyo.png"
+          alt="TUYO"
+          width={240}
+          height={80}
+          className="h-7 w-auto"
+          priority
+        />
+        {/* <nav className="hidden items-center gap-6 text-[15px] text-slate-700 md:flex">
+          <button type="button" className="inline-flex items-center gap-1.5 hover:text-slate-900">
+        Dashboard
+        <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+          <button
+        type="button"
+        className="inline-flex h-16 items-center border-b-2 border-[#fc5200] font-semibold text-slate-900"
+          >
+        Training
+          </button>
+          <button type="button" className="hover:text-slate-900">
+        Maps
+          </button>
+          <button type="button" className="hover:text-slate-900">
+        Challenges
+          </button>
+        </nav> */}
           </div>
 
           {/* <div className="flex items-center gap-4">
-            <button
-              type="button"
-              className="hidden rounded-md bg-[#fc5200] px-4 py-2 text-sm font-semibold text-white sm:inline-flex"
-            >
-              Start Trial
-            </button>
-            <Bell className="hidden h-5 w-5 text-slate-500 sm:block" />
-            <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-slate-300 text-xs font-semibold text-white sm:flex">
-              U
-            </div>
-            <ChevronDown className="hidden h-4 w-4 text-slate-500 sm:block" />
-            <CirclePlus className="h-5 w-5 text-[#fc5200]" />
+        <button
+          type="button"
+          className="hidden rounded-md bg-[#fc5200] px-4 py-2 text-sm font-semibold text-white sm:inline-flex"
+        >
+          Start Trial
+        </button>
+        <Bell className="hidden h-5 w-5 text-slate-500 sm:block" />
+        <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-slate-300 text-xs font-semibold text-white sm:flex">
+          U
+        </div>
+        <ChevronDown className="hidden h-4 w-4 text-slate-500 sm:block" />
+        <CirclePlus className="h-5 w-5 text-[#fc5200]" />
           </div> */}
         </div>
       </header>
 
       <main className="px-4 py-5 sm:px-6">
         <div className="mx-auto max-w-[1500px]">
-          <h1 className="mb-4 text-4xl font-semibold tracking-tight text-slate-900">Compliance tumakbo? Tuyo.</h1>
+          <h1 className="mb-4 text-4xl font-semibold tracking-tight text-slate-900">Compliance tumakbo? TUYO!</h1>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
             <section className="space-y-4">
@@ -569,6 +569,12 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto max-w-[1500px] px-4 py-3 text-sm text-slate-600 sm:px-6 text-center">
+          Copyright 2026 © Charles Calapini
+        </div>
+      </footer>
     </div>
   );
 }
