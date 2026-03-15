@@ -16,6 +16,7 @@ Draw a route on a map, apply realistic telemetry simulation, preview pace/elevat
 - Preview generated stats and chart profiles before export.
 - Download generated GPX with optional heart-rate extensions.
 - One-click upload to Strava with OAuth login.
+- Payment-gated Strava upload flow (GCash QR + payment screenshot proof).
 - Strava upload modal for title, description, local private notes, and optional photo attachment.
 
 ## Tech Stack
@@ -62,6 +63,8 @@ Strava upload requires server-side credentials:
 - `STRAVA_CLIENT_ID`
 - `STRAVA_CLIENT_SECRET`
 - optional `STRAVA_REDIRECT_URI` (defaults to `<origin>/api/strava/callback`)
+- `DISCORD_PAYMENT_WEBHOOK_URL` (for payment proof forwarding)
+- optional `NEXT_PUBLIC_GCASH_QR_IMAGE_PATH` (defaults to `/gcash-qr.png`)
 
 Copy `.env.example` to `.env.local` if you want to keep environment variables explicit.
 
@@ -79,13 +82,20 @@ Copy `.env.example` to `.env.local` if you want to keep environment variables ex
 8. Review metrics/charts.
 9. Click `Download GPX`.
 10. Optional: click `Connect Strava & Upload` (or `Upload To Strava`) for direct upload.
-11. In the upload modal, set title/description and optional flags (`Hide from Home`, `Trainer`, `Commute`).
-12. Optional: attach a photo (depends on Strava API permissions for your app/account).
+11. Payment modal appears with your GCash QR and price (PHP 50).
+12. Click `I Paid`, upload payment screenshot proof (sent to Discord webhook).
+13. Continue to Strava upload modal and set title/description/flags.
+14. Optional: attach a photo (depends on Strava API permissions for your app/account).
 
 ## Strava Notes
 
 - `Private Notes` in the modal are saved locally in your browser and are not sent by Strava’s public upload fields.
 - Photo upload uses Strava media endpoints that may be unavailable depending on app type and account permissions.
+
+## Payment Notes
+
+- Put your QR image in `public/gcash-qr.png` or set `NEXT_PUBLIC_GCASH_QR_IMAGE_PATH`.
+- Payment proof screenshot is forwarded to your Discord webhook URL.
 
 ## Project Structure
 

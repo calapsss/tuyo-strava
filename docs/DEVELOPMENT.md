@@ -35,6 +35,7 @@ Open `http://localhost:3000`.
 - OSRM providers for snapping (`routing.openstreetmap.de`, `router.project-osrm.org`).
 - Elevation providers (`open-meteo`, `opentopodata`).
 - Strava API for OAuth + upload when configured.
+- Discord webhook for payment proof forwarding.
 
 When developing features that call external services:
 
@@ -99,6 +100,8 @@ When developing features that call external services:
 - `STRAVA_CLIENT_ID`
 - `STRAVA_CLIENT_SECRET`
 - optional `STRAVA_REDIRECT_URI` if callback differs from the default
+- `DISCORD_PAYMENT_WEBHOOK_URL`
+- optional `NEXT_PUBLIC_GCASH_QR_IMAGE_PATH` (defaults to `/gcash-qr.png`)
 
 ### Strava Upload Modal Behavior
 
@@ -109,3 +112,11 @@ When developing features that call external services:
 - optional photo attachment
 - If auth is required mid-flow, metadata is persisted and restored after OAuth callback.
 - Photo upload is best-effort and may fail if Strava does not grant the media endpoint for the app/account.
+
+### Payment Gate Flow
+
+- Clicking `Upload To Strava` first opens a payment modal.
+- Step 1 shows GCash QR and fixed price (`PHP 50`).
+- Step 2 requires payment screenshot upload.
+- Backend route [`src/app/api/payments/proof/route.ts`](/Users/pips/Documents/GitHub/strava-hack/src/app/api/payments/proof/route.ts) forwards screenshot + metadata to Discord webhook.
+- On successful proof submission, Strava upload modal opens and normal upload flow continues.

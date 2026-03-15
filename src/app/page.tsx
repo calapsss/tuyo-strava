@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Crosshair, LocateFixed, Search, Shuffle } from "lucide-react";
 import { LineChartCard } from "@/components/LineChartCard";
+import { PaymentGateModal } from "@/components/PaymentGateModal";
 import { Sidebar } from "@/components/Sidebar";
 import { StravaUploadModal, type StravaUploadDraft } from "@/components/StravaUploadModal";
 import { generateGpx } from "@/lib/gpx-generator";
@@ -79,6 +80,10 @@ function previewKeyFor({
 const STRAVA_PENDING_UPLOAD_KEY = "tuyo.pendingStravaUpload";
 const STRAVA_DRAFT_UPLOAD_KEY = "tuyo.stravaUploadDraft";
 const STRAVA_PRIVATE_NOTES_KEY = "tuyo.stravaPrivateNotes";
+const GATE_PAYMENT_AMOUNT_PHP = 50;
+const GCASH_QR_IMAGE_PATH = process.env.NEXT_PUBLIC_GCASH_QR_IMAGE_PATH ?? "/gcash-qr.png";
+
+type PaymentStep = "pay" | "proof";
 
 interface StravaUploadPayload {
   gpx: string;
@@ -123,6 +128,10 @@ export default function Home() {
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isUploadingToStrava, setIsUploadingToStrava] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<PaymentStep>("pay");
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const [isSubmittingPaymentProof, setIsSubmittingPaymentProof] = useState(false);
   const [isStravaConnected, setIsStravaConnected] = useState(false);
   const [isStravaConfigured, setIsStravaConfigured] = useState(true);
   const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
@@ -596,6 +605,52 @@ export default function Home() {
     [persistPrivateNote, pollUploadStatus, updateActivityVisibility, uploadPhoto],
   );
 
+  const submitPaymentProof = useCallback(async (): Promise<boolean> => {
+    if (!paymentProofFile) {
+      setStatusMessage("Please upload your GCash payment screenshot first.");
+      return false;
+    }
+
+    setIsSubmittingPaymentProof(true);
+    try {
+      const formData = new FormData();
+      formData.append("screenshot", paymentProofFile, paymentProofFile.name);
+      formData.append("amount", String(GATE_PAYMENT_AMOUNT_PHP));
+      formData.append("title", stravaDraft.name || runName);
+      formData.append("activityType", activityType);
+
+      const response = await fetch("/api/payments/proof", {
+        method: "POST",
+        body: formData,
+      });
+
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setStatusMessage(`Payment proof submission failed: ${body.error ?? "Unknown error."}`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown network error.";
+      setStatusMessage(`Payment proof submission failed: ${reason}`);
+      return false;
+    } finally {
+      setIsSubmittingPaymentProof(false);
+    }
+  }, [activityType, paymentProofFile, runName, stravaDraft.name]);
+
+  const handleConfirmPaymentProof = useCallback(async () => {
+    const submitted = await submitPaymentProof();
+    if (!submitted) return;
+
+    setIsPaymentModalOpen(false);
+    setPaymentStep("pay");
+    setPaymentProofFile(null);
+    setIsStravaModalOpen(true);
+    setStatusMessage("Payment proof submitted. Continue with Strava upload details.");
+  }, [submitPaymentProof]);
+
   const handleConfirmStravaUpload = useCallback(async () => {
     if (!canUploadToStrava) {
       setStatusMessage("Generate an up-to-date preview before uploading to Strava.");
@@ -624,14 +679,21 @@ export default function Home() {
       return;
     }
 
+    if (!isStravaConfigured) {
+      setStatusMessage("Strava integration is not configured on the server.");
+      return;
+    }
+
     setStravaDraft((previous) => ({
       ...previous,
       name: runName || previous.name,
       description: description || previous.description,
     }));
     setStravaPhoto(null);
-    setIsStravaModalOpen(true);
-  }, [canUploadToStrava, description, runName]);
+    setPaymentProofFile(null);
+    setPaymentStep("pay");
+    setIsPaymentModalOpen(true);
+  }, [canUploadToStrava, description, isStravaConfigured, runName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -907,6 +969,24 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      <PaymentGateModal
+        isOpen={isPaymentModalOpen}
+        step={paymentStep}
+        amountPhp={GATE_PAYMENT_AMOUNT_PHP}
+        qrImagePath={GCASH_QR_IMAGE_PATH}
+        proofFile={paymentProofFile}
+        isSubmitting={isSubmittingPaymentProof}
+        onClose={() => {
+          if (isSubmittingPaymentProof) return;
+          setIsPaymentModalOpen(false);
+          setPaymentStep("pay");
+          setPaymentProofFile(null);
+        }}
+        onContinue={() => setPaymentStep("proof")}
+        onProofFileChange={setPaymentProofFile}
+        onSubmitProof={handleConfirmPaymentProof}
+      />
 
       <StravaUploadModal
         isOpen={isStravaModalOpen}
